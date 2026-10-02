@@ -1,0 +1,1414 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nmap, Network Mapper | Auditoría Informática</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* =========================================================
+   TOKENS
+   ========================================================= */
+:root{
+  --bg:#04080b; --p1:#08141a; --p2:#0d1f27; --ln:#16444c;
+  --cy:#19e3d4; --gr:#7dffa6; --wh:#eef7f7; --mu:#93b4b8;
+  --mg:#ff2bd6; --vi:#8a5cff; --am:#ffb23d; --rd:#ff5d6c;
+  --f:'Chakra Petch','Segoe UI',system-ui,sans-serif;
+  --m:'JetBrains Mono',ui-monospace,Consolas,'Courier New',monospace;
+  color-scheme: dark;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--wh);font-family:var(--f);overflow:hidden}
+body{font-size:clamp(15px,.8vw + .62vh,22px);line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0}
+:focus-visible{outline:2px solid var(--am);outline-offset:2px}
+pre,code,.mono{font-family:var(--m)}
+b,strong{font-weight:600}
+
+/* ---------- capas globales ---------- */
+#bg{position:fixed;inset:0;width:100%;height:100%;z-index:0}
+#vig{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse at 50% 45%,transparent 45%,rgba(0,0,0,.65) 100%)}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;
+  background:repeating-linear-gradient(0deg,rgba(255,255,255,.022) 0 1px,transparent 1px 3px)}
+.nofx body::after,.nofx #vig{display:none}
+
+#progress{position:fixed;left:0;top:0;height:3px;width:0;z-index:70;
+  background:linear-gradient(90deg,var(--cy),var(--vi),var(--mg));transition:width .5s ease}
+.hud{position:fixed;top:14px;z-index:40;font-family:var(--m);font-size:.72rem;color:var(--mu);display:flex;gap:1.2rem}
+#hudL{left:clamp(16px,3vw,48px)} #hudR{right:clamp(16px,3vw,48px)}
+.hud b{color:var(--cy);font-weight:600}
+
+/* ---------- diapositivas ---------- */
+#deck{position:fixed;inset:0;z-index:2}
+.slide{position:absolute;inset:0;padding:clamp(40px,6vh,64px) clamp(18px,5vw,84px) 88px;
+  display:flex;flex-direction:column;gap:clamp(10px,1.6vh,22px);
+  overflow-x:hidden;overflow-y:auto;opacity:0;visibility:hidden;transform:scale(.985);
+  transition:opacity .45s ease,transform .45s ease,visibility 0s .45s}
+.slide.active{opacity:1;visibility:visible;transform:none;transition-delay:0s}
+.sh h2{font-size:clamp(1.7rem,3.4vw + .6vh,3.3rem);line-height:1.05;font-weight:700;letter-spacing:.01em;
+  padding-left:.7rem;border-left:4px solid var(--cy)}
+.lead{color:var(--mu);margin-top:.4rem;padding-left:.95rem;max-width:70ch}
+.grow{flex:1;min-height:0}
+
+/* glitch controlado */
+.glitch{position:relative;display:inline-block}
+.glitch::before,.glitch::after{content:attr(data-text);position:absolute;inset:0;opacity:0;pointer-events:none}
+.glitch.gl::before{opacity:.9;color:var(--mg);animation:gl1 .42s steps(3) 1}
+.glitch.gl::after{opacity:.9;color:var(--cy);animation:gl2 .42s steps(3) 1}
+@keyframes gl1{0%{clip-path:inset(5% 0 70% 0);transform:translate(-4px,0)}50%{clip-path:inset(40% 0 30% 0);transform:translate(3px,0)}100%{clip-path:inset(75% 0 5% 0);transform:translate(-2px,0)}}
+@keyframes gl2{0%{clip-path:inset(70% 0 8% 0);transform:translate(4px,0)}50%{clip-path:inset(10% 0 60% 0);transform:translate(-3px,0)}100%{clip-path:inset(35% 0 40% 0);transform:translate(2px,0)}}
+.nofx .glitch::before,.nofx .glitch::after{display:none}
+
+/* ---------- paneles HUD ---------- */
+.panel{position:relative;background:linear-gradient(180deg,var(--p2),var(--p1));border:1px solid var(--ln);border-radius:3px;padding:clamp(12px,2vh,22px)}
+.panel::before,.panel::after{content:"";position:absolute;width:14px;height:14px;pointer-events:none;border:2px solid var(--cy)}
+.panel::before{left:-1px;top:-1px;border-right:0;border-bottom:0}
+.panel::after{right:-1px;bottom:-1px;border-left:0;border-top:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:clamp(12px,2.2vw,32px);align-items:stretch}
+.grid2.fixL{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr)}
+.btn{font-family:var(--m);font-size:.82rem;padding:.5rem .85rem;border:1px solid var(--cy);color:var(--cy);border-radius:2px;
+  transition:background .2s,color .2s,box-shadow .2s}
+.btn:hover{background:rgba(25,227,212,.14)}
+.btn.sel,.btn[aria-pressed="true"]{background:var(--cy);color:#001314}
+.code{font-family:var(--m);font-size:.9em;background:#02090c;border:1px solid var(--ln);border-left:3px solid var(--gr);
+  color:var(--gr);padding:.6rem .8rem;white-space:pre-wrap;overflow-x:auto;border-radius:2px}
+.term{font-family:var(--m);font-size:.82em;line-height:1.5;background:#02090c;border:1px solid var(--ln);color:#b6fff0;
+  padding:.7rem .85rem;white-space:pre-wrap;border-radius:2px;min-height:6.5em;overflow:hidden}
+.cap{color:var(--mu);font-size:.95em;min-height:2.9em}
+.note{border:1px dashed var(--am);color:#ffe2b0;padding:.55rem .8rem;border-radius:2px;font-size:.92em;background:rgba(255,178,61,.06)}
+.note b{color:var(--am)}
+.ok{color:var(--gr)} .warn{color:var(--am)} .bad{color:var(--rd)}
+
+/* ---------- ojos ---------- */
+.eye{position:relative;aspect-ratio:2/1;flex:none;filter:drop-shadow(0 0 18px rgba(25,227,212,.28))}
+.eye svg{display:block;width:100%;height:100%;overflow:visible}
+.eye-xl{width:min(80vw,72vh)} .eye-l{width:min(54vw,46vh)}
+.eye-m{width:clamp(150px,17vw,260px)} .eye-s{width:clamp(96px,10vw,150px)} .eye-xs{width:64px}
+.spin-a,.spin-b,.spin-c{transform-box:fill-box;transform-origin:center}
+.spin-a{animation:spin 36s linear infinite} .spin-b{animation:spin 52s linear infinite reverse} .spin-c{animation:spin 90s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.nofx .spin-a,.nofx .spin-b,.nofx .spin-c{animation:none}
+
+/* ---------- navegación ---------- */
+#nav{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:80;display:flex;align-items:center;gap:.5rem;
+  background:rgba(4,12,16,.88);border:1px solid var(--ln);padding:.4rem .5rem;border-radius:3px;backdrop-filter:blur(6px);max-width:calc(100vw - 16px);flex-wrap:wrap;justify-content:center}
+#dots{display:flex;gap:6px;padding:0 .4rem}
+#dots button{width:20px;height:8px;border-radius:1px;background:#1b3a41;transition:background .25s,width .25s}
+#dots button.on{background:var(--cy);width:34px}
+#dots button.seen{background:#2a7c80}
+#menu{position:fixed;inset:0;z-index:90;background:rgba(2,6,8,.94);display:flex;align-items:center;justify-content:center;padding:20px}
+#menu[hidden]{display:none}
+#menu .box{max-width:760px;width:100%;max-height:100%;overflow:auto}
+#menu h3{margin-bottom:.8rem;font-size:1.3rem}
+#menu ol{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:.4rem}
+#menu li button{width:100%;text-align:left;padding:.55rem .8rem;border:1px solid var(--ln);border-radius:2px;display:flex;gap:.8rem}
+#menu li button:hover,#menu li button.on{border-color:var(--cy);background:rgba(25,227,212,.1)}
+#menu li span{font-family:var(--m);color:var(--cy)}
+#tip{position:fixed;z-index:95;pointer-events:none;background:#02090c;border:1px solid var(--cy);color:var(--wh);font-size:.82rem;padding:.35rem .6rem;border-radius:2px;max-width:260px;opacity:0;transition:opacity .15s}
+#tip.on{opacity:1}
+
+/* =========================================================
+   1 PORTADA
+   ========================================================= */
+.s-cover{align-items:center;justify-content:center;text-align:center;overflow:hidden;gap:0}
+.cover-eye{position:relative;display:flex;justify-content:center}
+.cover-net{position:absolute;left:50%;top:50%;width:200%;aspect-ratio:1200/640;transform:translate(-50%,-50%);pointer-events:none;z-index:0}
+.cover-eye .eye{z-index:1}
+.s-cover h1{font-size:clamp(3.4rem,15vh,10rem);line-height:.95;font-weight:700;letter-spacing:.08em;margin-top:clamp(0px,1vh,12px);position:relative;z-index:2;text-shadow:0 0 30px rgba(25,227,212,.35)}
+.s-cover .sub{font-size:clamp(1.2rem,3.4vh,2rem);color:var(--cy);font-weight:500;position:relative;z-index:2;margin-top:.2rem}
+.s-cover .tag{color:var(--mu);margin-top:.3rem;position:relative;z-index:2}
+.s-cover .team{margin-top:clamp(8px,2vh,22px);font-size:clamp(1.05rem,2.6vh,1.5rem);font-weight:600;position:relative;z-index:2;display:flex;gap:1.1rem;align-items:center;justify-content:center;flex-wrap:wrap}
+.s-cover .team i{width:34px;height:2px;background:linear-gradient(90deg,var(--cy),var(--mg))}
+.s-cover .boot{font-family:var(--m);font-size:.78rem;color:var(--gr);margin-top:clamp(6px,1.6vh,16px);min-height:1.4em;position:relative;z-index:2}
+.hint{position:absolute;right:clamp(16px,3vw,48px);bottom:78px;font-family:var(--m);font-size:.74rem;color:var(--mu);z-index:3;text-align:right}
+.cnode{opacity:0;transition:opacity .8s}
+.cnode.on{opacity:1}
+.flow{stroke-dasharray:4 8;animation:dash 3s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-48}}
+.nofx .flow{animation:none}
+
+/* =========================================================
+   2 QUÉ ES
+   ========================================================= */
+.big{font-size:clamp(1.3rem,2.3vw,2rem);line-height:1.25;font-weight:500}
+.big b{color:var(--cy)}
+.facts{list-style:none;margin-top:1rem;display:grid;gap:.7rem}
+.facts li{padding:.65rem .9rem;border-left:3px solid var(--ln);background:rgba(13,31,39,.6)}
+.facts li:hover{border-color:var(--cy)}
+.chain{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.9rem}
+.chip{font-family:var(--m);font-size:.8rem;padding:.4rem .65rem;border:1px solid var(--ln);color:var(--mu);border-radius:2px;position:relative;transition:all .25s}
+.chip:not(:last-child)::after{content:"";position:absolute;right:-7px;top:50%;width:7px;height:1px;background:var(--ln)}
+.chip.done{color:var(--cy);border-color:#1c6b70}
+.chip.on{background:var(--cy);color:#001314;border-color:var(--cy)}
+.scanbox{position:relative;display:grid;grid-template-columns:auto 1fr;gap:clamp(14px,3vw,48px);align-items:center}
+.beam{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;overflow:visible}
+.devices{display:grid;gap:8px;position:relative;z-index:1}
+.dev{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;border:1px solid var(--ln);padding:.45rem .7rem;border-radius:2px;background:rgba(2,9,12,.7);opacity:.2;transition:opacity .4s,border-color .3s}
+.devices.g1 .dev{opacity:.55}
+.devices.g2 .dev{opacity:1}
+.dev.look{border-color:var(--cy);box-shadow:0 0 14px rgba(25,227,212,.25)}
+.dn{display:flex;flex-direction:column;line-height:1.25}
+.dn .ip{font-family:var(--m);font-size:.74rem;color:var(--mu)}
+.dn .up{font-family:var(--m);font-size:.7rem;color:var(--gr);font-style:normal;opacity:0;transition:opacity .4s}
+.devices.g2 .up{opacity:1}
+.dp{display:flex;gap:5px;flex-wrap:wrap}
+.pc{font-family:var(--m);font-size:.74rem;border:1px solid #1e5a60;padding:.1rem .4rem;border-radius:2px;display:inline-flex;gap:.35rem}
+.pc i{font-style:normal;color:var(--cy);opacity:0;transition:opacity .4s}
+.pc u{text-decoration:none;color:var(--gr);opacity:0;transition:opacity .4s}
+.devices.g3 .pc i,.devices.g4 .pc u{opacity:1}
+
+/* =========================================================
+   3 PARA QUÉ SIRVE
+   ========================================================= */
+.fnlist{display:grid;gap:8px;align-content:start}
+.fnb{text-align:left;padding:.75rem 1rem;border:1px solid var(--ln);border-radius:2px;background:rgba(13,31,39,.55);transition:all .2s;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.fnb:hover{border-color:var(--cy)}
+.fnb.sel{border-color:var(--cy);background:rgba(25,227,212,.12);box-shadow:inset 3px 0 0 var(--cy)}
+.fnb .fc{font-family:var(--m);font-size:.74rem;color:var(--mu)}
+.fnpanel{display:flex;flex-direction:column;gap:.8rem}
+.fnpanel .head{display:flex;align-items:center;gap:1rem}
+.fnpanel h3{font-size:clamp(1.3rem,2vw,1.8rem)}
+.use{color:var(--mu);font-size:.92em}
+.use b{color:var(--am)}
+
+/* =========================================================
+   4 CÓMO FUNCIONA
+   ========================================================= */
+.stage4{position:relative;height:clamp(150px,30vh,300px);padding:0}
+.stage4 canvas{position:absolute;inset:0;width:100%;height:100%}
+.stage4 .eye{position:absolute;left:2%;top:50%;transform:translateY(-50%)}
+.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.stp{text-align:left;padding:.7rem .8rem;border:1px solid var(--ln);border-radius:2px;background:rgba(13,31,39,.55);position:relative;transition:all .2s;min-height:4.2rem}
+.stp small{font-family:var(--m);color:var(--cy);display:block}
+.stp:hover,.stp.sel{border-color:var(--cy);background:rgba(25,227,212,.12)}
+.stp:not(:last-child)::after{content:"";position:absolute;right:-9px;top:50%;width:9px;height:2px;background:var(--cy);opacity:.6}
+.detail4{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+.detail4 h3{font-size:1.25rem;margin-bottom:.3rem}
+
+/* =========================================================
+   5 PUERTOS
+   ========================================================= */
+.rack{display:flex;flex-direction:column;gap:12px}
+.chassis{border:2px solid #1e5a60;border-radius:4px;background:linear-gradient(180deg,#0b1a20,#06101400);padding:14px;position:relative}
+.chassis .leds{display:flex;gap:6px;margin-bottom:10px;align-items:center}
+.led{width:8px;height:8px;border-radius:50%;background:var(--gr);box-shadow:0 0 8px var(--gr);animation:blinkled 2.4s infinite}
+.led:nth-child(2){background:var(--cy);box-shadow:0 0 8px var(--cy);animation-delay:.6s}
+.led:nth-child(3){background:var(--am);box-shadow:0 0 8px var(--am);animation-delay:1.3s}
+@keyframes blinkled{0%,80%,100%{opacity:1}90%{opacity:.2}}
+.nofx .led{animation:none}
+.chassis .tt{font-family:var(--m);font-size:.74rem;color:var(--mu);margin-left:auto}
+.ports{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.port{font-family:var(--m);padding:.7rem .3rem .5rem;border:1px solid #1e4b52;background:#02090c;border-radius:2px;text-align:center;position:relative;transition:all .18s;color:var(--mu)}
+.port::before{content:"";display:block;width:60%;height:10px;margin:0 auto .45rem;background:#000;border:1px solid #2a6a70;border-radius:1px}
+.port.key{color:var(--wh);border-color:#2f8b90}
+.port:hover,.port.sel{border-color:var(--cy);color:var(--cy);box-shadow:0 0 16px rgba(25,227,212,.35);transform:translateY(-2px)}
+.port:hover::before,.port.sel::before{background:var(--cy);box-shadow:0 0 10px var(--cy)}
+.pinfo{display:flex;flex-direction:column;gap:.7rem}
+.pbig{font-family:var(--m);font-size:clamp(2.4rem,6vw,4.6rem);color:var(--cy);line-height:1}
+.pinfo h3{font-size:1.6rem}
+.compare{display:grid;gap:.5rem}
+
+/* =========================================================
+   6 ESTADOS
+   ========================================================= */
+.s6top{display:flex;align-items:center;gap:1.2rem}
+.states{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(8px,1.6vw,20px)}
+.stc{border:1px solid var(--ln);border-radius:2px;background:rgba(13,31,39,.55);padding:.8rem;text-align:center;transition:all .25s;position:relative;overflow:hidden}
+.stc svg{width:clamp(70px,9vw,120px);height:auto;color:var(--mu);transition:color .25s}
+.stc h3{font-family:var(--m);font-size:clamp(1.2rem,2vw,1.8rem);margin-top:.2rem;letter-spacing:.06em}
+.stc p{color:var(--mu);font-size:.88em}
+.stc:hover{border-color:var(--cy)}
+.stc.sel{background:rgba(25,227,212,.08)}
+.stc[data-s="open"].sel{border-color:var(--gr)} .stc[data-s="open"].sel svg,.stc[data-s="open"].sel h3{color:var(--gr)}
+.stc[data-s="closed"].sel{border-color:var(--rd)} .stc[data-s="closed"].sel svg,.stc[data-s="closed"].sel h3{color:var(--rd)}
+.stc[data-s="filtered"].sel{border-color:var(--am)} .stc[data-s="filtered"].sel svg,.stc[data-s="filtered"].sel h3{color:var(--am)}
+.sdetail{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.sdetail h4{color:var(--cy);font-size:.95rem;margin-bottom:.25rem}
+.sdetail p,.sdetail pre{font-size:.92em}
+
+/* =========================================================
+   7 TÉCNICAS
+   ========================================================= */
+.techs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.tc{border:1px solid var(--ln);border-radius:2px;padding:.65rem .8rem;text-align:left;background:rgba(13,31,39,.55);transition:all .2s}
+.tc .fl{font-family:var(--m);font-size:1.4rem;color:var(--cy);display:block}
+.tc span.nm{font-size:.88em;color:var(--mu)}
+.tc:hover{border-color:var(--cy)}
+.tc.sel{background:rgba(25,227,212,.14);border-color:var(--cy);box-shadow:inset 0 -3px 0 var(--cy)}
+.tdetail{display:grid;grid-template-columns:1.2fr .8fr;gap:18px}
+.tdetail h3{font-size:clamp(1.3rem,2.2vw,1.9rem)}
+.tdetail dl{display:grid;gap:.5rem;margin-top:.6rem}
+.tdetail dt{font-size:.8rem;color:var(--cy);font-family:var(--m)}
+.flags{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin:.4rem 0 .6rem}
+.flag{font-family:var(--m);font-size:.72rem;text-align:center;padding:.5rem 0;border:1px solid #1e4b52;color:#3f6e73;border-radius:2px;transition:all .25s}
+.flag.on{background:var(--am);color:#1b1000;border-color:var(--am);box-shadow:0 0 12px rgba(255,178,61,.5)}
+.flagnote{font-size:.85em;color:var(--mu)}
+
+/* =========================================================
+   8 SERVICIOS Y SO
+   ========================================================= */
+.s8top{display:flex;justify-content:center}
+.dual{display:grid;grid-template-columns:1fr 1fr;gap:clamp(12px,2vw,28px)}
+.dual .panel{display:flex;flex-direction:column;gap:.6rem;transition:box-shadow .3s}
+.dual h3{font-size:clamp(1.15rem,1.8vw,1.6rem)}
+.dual h3 code{color:var(--cy);font-size:.9em;margin-left:.4rem}
+.dual .panel.focus{box-shadow:0 0 0 1px var(--cy),0 0 26px rgba(25,227,212,.3)}
+.dual .panel.focus .term{border-color:var(--cy)}
+.scanline{position:absolute;left:0;right:0;height:2px;background:var(--cy);box-shadow:0 0 12px var(--cy);top:0;opacity:0;pointer-events:none}
+.panel.focus .scanline{opacity:1;animation:sweep 1.6s ease-in-out 2}
+@keyframes sweep{0%{top:0}100%{top:100%}}
+.nse{display:flex;gap:1rem;align-items:center;flex-wrap:wrap}
+.nse code{color:var(--vi);background:#0b0a1e;padding:.1rem .4rem;border:1px solid #2b2466;border-radius:2px}
+
+/* =========================================================
+   9 AUDITORÍA
+   ========================================================= */
+.timeline{display:grid;grid-template-columns:repeat(5,1fr);position:relative;gap:6px}
+.timeline::before{content:"";position:absolute;left:10%;right:10%;top:calc(100% - 3.2rem);height:2px;background:linear-gradient(90deg,var(--ln),var(--cy),var(--ln))}
+.ph{display:flex;flex-direction:column;align-items:center;gap:.35rem;text-align:center;padding:0 2px}
+.ph .slot{height:clamp(40px,7vh,64px);display:flex;align-items:flex-end;justify-content:center}
+.ph button{padding:.55rem .4rem;width:100%;border:1px solid var(--ln);background:var(--p1);border-radius:2px;position:relative;z-index:1;transition:all .2s;font-weight:500}
+.ph button:hover{border-color:var(--cy)}
+.ph button.sel{background:var(--cy);color:#001314;border-color:var(--cy)}
+.ph.exec button{border-color:var(--vi)}
+.ph.exec button.sel{background:var(--vi);color:#fff;border-color:var(--vi)}
+.a9{display:grid;grid-template-columns:1fr 1.15fr;gap:clamp(12px,2vw,28px)}
+.a9 h3{font-size:1.3rem;margin-bottom:.3rem}
+.chk{display:grid;gap:6px;align-content:start}
+.ck{text-align:left;border:1px solid var(--ln);border-radius:2px;padding:.55rem .8rem;background:rgba(13,31,39,.55);transition:all .2s;width:100%}
+.ck .row{display:flex;gap:.6rem;align-items:center}
+.ck .box{width:16px;height:16px;border:1.5px solid var(--cy);border-radius:2px;flex:none;position:relative}
+.ck.sel .box::after{content:"";position:absolute;left:3px;top:0;width:5px;height:10px;border:solid var(--gr);border-width:0 2.5px 2.5px 0;transform:rotate(40deg)}
+.ck .more{display:none;margin-top:.5rem;font-size:.88em;color:var(--mu)}
+.ck.sel .more{display:block}
+.ck.sel{border-color:var(--gr);background:rgba(125,255,166,.06)}
+.ck .more code{display:block;margin-top:.3rem;color:var(--gr);font-size:.9em}
+
+/* =========================================================
+   10 NMAP VS NESSUS
+   ========================================================= */
+.vs{display:grid;grid-template-columns:1fr auto 1fr;gap:clamp(10px,2vw,28px);align-items:stretch}
+.tool{transition:box-shadow .3s,border-color .3s,opacity .3s}
+.tool h3{font-size:clamp(1.4rem,2.4vw,2.2rem);font-family:var(--m)}
+.tool .role{color:var(--mu);margin-bottom:.5rem}
+.tool ul{list-style:none;display:grid;gap:.35rem}
+.tool li{padding-left:1rem;position:relative}
+.tool li::before{content:"";position:absolute;left:0;top:.65em;width:6px;height:6px;background:currentColor}
+#tNmap{color:var(--cy)} #tNessus{color:var(--vi)}
+.tool li,.tool .role{color:var(--wh)} .tool .role{color:var(--mu)}
+.tool.lit{box-shadow:0 0 0 1px currentColor,0 0 30px -4px currentColor}
+.tool.dim{opacity:.4}
+#tNessus.panel::before,#tNessus.panel::after{border-color:var(--vi)}
+.vsmid{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.6rem}
+.qs{display:flex;flex-wrap:wrap;gap:8px}
+.q{border:1px solid var(--ln);padding:.45rem .75rem;border-radius:2px;font-size:.9em;transition:all .2s;background:rgba(13,31,39,.55)}
+.q:hover{border-color:var(--wh)}
+.q.sel{background:var(--wh);color:#001314}
+.together{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-family:var(--m);font-size:.85rem}
+.together span{padding:.35rem .6rem;border:1px solid var(--ln);border-radius:2px}
+.together .a{color:var(--cy);border-color:var(--cy)} .together .b{color:var(--vi);border-color:var(--vi)} .together .c{color:var(--gr);border-color:var(--gr)}
+
+/* =========================================================
+   11 VENTAJAS / LIMITACIONES
+   ========================================================= */
+.pc2{display:grid;grid-template-columns:1fr auto 1fr;gap:clamp(10px,2vw,28px);align-items:start}
+.col h3{font-family:var(--m);font-size:clamp(1.2rem,2vw,1.7rem);margin-bottom:.6rem}
+.col.pro h3{color:var(--gr)} .col.con h3{color:var(--am)}
+.col ul{list-style:none;display:grid;gap:8px}
+.col li{border:1px solid var(--ln);border-left-width:4px;padding:.55rem .8rem;border-radius:2px;background:rgba(13,31,39,.55);
+  opacity:0;transform:translateX(var(--dx,-24px));transition:opacity .6s ease,transform .6s ease,border-color .2s,background .2s;transition-delay:calc(var(--i)*110ms + 250ms)}
+.col.pro li{border-left-color:var(--gr)} .col.con li{--dx:24px;border-left-color:var(--am)}
+.slide.active .col li{opacity:1;transform:none}
+.col li:hover{background:rgba(25,227,212,.08);transition-delay:0s}
+.col li b{display:block}
+.col li span{color:var(--mu);font-size:.88em}
+.midEye{align-self:center}
+
+/* =========================================================
+   12 CIERRE
+   ========================================================= */
+.s-end{align-items:center;text-align:center;justify-content:center;gap:clamp(6px,1.4vh,16px);overflow:hidden}
+#closeNet{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.s-end > *:not(canvas){position:relative;z-index:1}
+.quote{font-size:clamp(1.3rem,3.1vw,2.6rem);font-weight:600;line-height:1.2;max-width:26ch;text-shadow:0 0 18px #000,0 0 6px #000}
+.quote small{display:block}
+.endterm{width:min(560px,92vw);text-align:left;min-height:5.6em}
+.complete{font-family:var(--m);font-size:clamp(1.1rem,2.4vh,1.6rem);color:var(--gr);letter-spacing:.14em;min-height:1.6em}
+.names{font-size:clamp(1.1rem,2.6vh,1.5rem);font-weight:600;text-shadow:0 0 10px #000}
+.names small{display:block;font-weight:400;color:var(--mu);font-size:.8em}
+
+/* ---------- responsive ---------- */
+@media (max-width:980px){
+  .grid2,.grid2.fixL,.dual,.a9,.tdetail,.detail4,.sdetail,.vs,.pc2{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr 1fr}
+  .techs{grid-template-columns:repeat(2,1fr)}
+  .states{grid-template-columns:1fr}
+  .vsmid{flex-direction:row}
+  .midEye{display:none}
+  #dots{display:none}
+  #menu ol{grid-template-columns:1fr}
+  .scanbox{grid-template-columns:1fr;justify-items:center}
+  .timeline{grid-template-columns:repeat(5,1fr);font-size:.8em}
+}
+@media (max-height:620px){ .hud{display:none} }
+@media (prefers-reduced-motion:reduce){
+  .slide{transition:opacity .2s}
+  .spin-a,.spin-b,.spin-c,.flow,.led{animation:none}
+}
+</style>
+</head>
+<body>
+<canvas id="bg" aria-hidden="true"></canvas>
+<div id="vig"></div>
+<div id="progress"></div>
+<div class="hud" id="hudL"><span><b>nmap</b></span><span>auditoría informática</span></div>
+<div class="hud" id="hudR"><span id="hudN"></span><span id="hudT"></span></div>
+
+<main id="deck">
+
+<!-- 1 PORTADA -->
+<section class="slide s-cover" id="s1" data-title="Portada">
+  <div class="cover-eye">
+    <svg class="cover-net" id="coverNet" viewBox="-600 -320 1200 640" aria-hidden="true"></svg>
+    <div id="eyeCover" class="eye-xl"></div>
+  </div>
+  <h1 class="glitch" data-text="NMAP">NMAP</h1>
+  <p class="sub">Network Mapper</p>
+  <p class="tag">Auditoría informática y análisis de redes</p>
+  <p class="team"><span>Mariel Obregón</span><i></i><span>Isaías García</span></p>
+  <p class="boot mono" id="boot"></p>
+  <p class="hint">Mueve el cursor. Avanza con la flecha derecha.</p>
+</section>
+
+<!-- 2 QUÉ ES -->
+<section class="slide" id="s2" data-title="¿Qué es Nmap?">
+  <header class="sh"><h2 class="glitch" data-text="¿Qué es Nmap?">¿Qué es Nmap?</h2></header>
+  <div class="grid2 grow">
+    <div>
+      <p class="big"><b>Nmap</b> significa <b>Network Mapper</b>: un mapeador de redes.</p>
+      <p class="lead" style="padding-left:0;margin-top:.7rem">Herramienta de código abierto para explorar redes y auditar su seguridad.</p>
+      <ul class="facts">
+        <li>Descubre qué dispositivos están activos en una red.</li>
+        <li>Identifica puertos, servicios y versiones.</li>
+        <li>Se usa con autorización: muestra lo que está expuesto para poder revisarlo.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <div class="chain" id="chain"></div>
+      <div class="scanbox" id="scanbox">
+        <div id="eyeWhat" class="eye-m"></div>
+        <svg class="beam" id="beam" aria-hidden="true"><line id="beamLine" x1="0" y1="0" x2="0" y2="0" stroke="#19e3d4" stroke-width="2" stroke-dasharray="6 6" opacity="0"/></svg>
+        <div class="devices" id="devices"></div>
+      </div>
+      <p class="cap" id="chainCap" style="margin-top:.8rem"></p>
+    </div>
+  </div>
+</section>
+
+<!-- 3 PARA QUÉ SIRVE -->
+<section class="slide" id="s3" data-title="¿Para qué sirve?">
+  <header class="sh"><h2 class="glitch" data-text="¿Para qué sirve?">¿Para qué sirve?</h2><p class="lead">Seis funciones principales. Selecciona una.</p></header>
+  <div class="grid2 fixL grow">
+    <div class="fnlist" id="fnList"></div>
+    <div class="panel fnpanel">
+      <div class="head"><div id="eyeFn" class="eye-s"></div><h3 id="fnT"></h3></div>
+      <p id="fnD"></p>
+      <pre class="code" id="fnC"></pre>
+      <p class="use" id="fnU"></p>
+    </div>
+  </div>
+</section>
+
+<!-- 4 CÓMO FUNCIONA -->
+<section class="slide" id="s4" data-title="¿Cómo funciona?">
+  <header class="sh"><h2 class="glitch" data-text="¿Cómo funciona?">¿Cómo funciona?</h2><p class="lead">Pasa el cursor sobre cada etapa.</p></header>
+  <div class="panel stage4" id="stage4"><canvas id="pk"></canvas><div id="eyeFlow" class="eye-s"></div></div>
+  <div class="steps" id="steps"></div>
+  <div class="detail4 panel">
+    <div><h3 id="s4t"></h3><p id="s4d"></p></div>
+    <pre class="term" id="s4o"></pre>
+  </div>
+</section>
+
+<!-- 5 PUERTOS -->
+<section class="slide" id="s5" data-title="Los puertos">
+  <header class="sh"><h2 class="glitch" data-text="Los puertos">Los puertos</h2><p class="lead">Cada servicio de red entra por una "puerta" numerada. Pasa el cursor sobre un puerto.</p></header>
+  <div class="grid2 grow">
+    <div class="rack">
+      <div class="chassis panel">
+        <div class="leds"><span class="led"></span><span class="led"></span><span class="led"></span><div id="eyePorts" class="eye-xs" style="margin-left:.8rem"></div><span class="tt">servidor 192.168.1.20</span></div>
+        <div class="ports" id="ports"></div>
+      </div>
+      <p class="flagnote" style="color:var(--mu)">Resaltados: 21, 22, 53, 80 y 443, los puertos que más verás en una auditoría.</p>
+    </div>
+    <div class="pinfo">
+      <div class="panel">
+        <div class="pbig" id="pNum">22</div>
+        <h3 id="pSvc">SSH</h3>
+        <p id="pTxt"></p>
+      </div>
+      <div class="note"><b>Ojo:</b> el número de puerto no garantiza qué servicio está funcionando. Es una convención, no una regla.</div>
+      <div class="panel compare">
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sel" id="cmpA">Sin -sV</button><button class="btn" id="cmpB">Con -sV</button></div>
+        <pre class="code" id="cmpOut"></pre>
+        <p class="use" id="cmpTxt"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 ESTADOS -->
+<section class="slide" id="s6" data-title="Estados de los puertos">
+  <header class="sh s6top"><div><h2 class="glitch" data-text="Estados de los puertos">Estados de los puertos</h2><p class="lead">Haz clic en un estado. El ojo intenta ver qué hay detrás.</p></div></header>
+  <div style="display:flex;justify-content:center"><div id="eyeStates" class="eye-m"></div></div>
+  <div class="states" id="states">
+    <button class="stc" data-s="open">
+      <svg viewBox="0 0 120 140" aria-hidden="true"><defs><linearGradient id="lg" x1="0" x2="1"><stop offset="0" stop-color="currentColor" stop-opacity=".5"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>
+        <rect x="14" y="10" width="92" height="124" fill="none" stroke="currentColor" stroke-width="3"/>
+        <polygon points="52,22 106,10 106,134 52,122" fill="url(#lg)"/>
+        <polygon points="14,10 52,22 52,122 14,134" fill="#0b2a30" stroke="currentColor" stroke-width="2"/></svg>
+      <h3>OPEN</h3><p>Hay un servicio escuchando.</p>
+    </button>
+    <button class="stc" data-s="closed">
+      <svg viewBox="0 0 120 140" aria-hidden="true"><rect x="14" y="10" width="92" height="124" fill="none" stroke="currentColor" stroke-width="3"/>
+        <rect x="22" y="18" width="76" height="108" fill="#0b2a30" stroke="currentColor" stroke-width="2"/><circle cx="84" cy="74" r="5" fill="currentColor"/>
+        <line x1="40" y1="50" x2="80" y2="100" stroke="currentColor" stroke-width="2" opacity=".4"/></svg>
+      <h3>CLOSED</h3><p>Accesible, pero sin servicio.</p>
+    </button>
+    <button class="stc" data-s="filtered">
+      <svg viewBox="0 0 120 140" aria-hidden="true"><rect x="14" y="10" width="92" height="124" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="8 5"/>
+        <g stroke="currentColor" stroke-width="2" opacity=".7"><line x1="14" y1="44" x2="106" y2="44"/><line x1="14" y1="78" x2="106" y2="78"/><line x1="14" y1="112" x2="106" y2="112"/></g>
+        <text x="60" y="84" text-anchor="middle" font-size="40" fill="currentColor" font-family="monospace">?</text></svg>
+      <h3>FILTERED</h3><p>Algo bloquea la vista.</p>
+    </button>
+  </div>
+  <div class="panel sdetail" id="sdetail">
+    <div><h4>Qué ve Nmap</h4><pre class="code" id="sd1"></pre></div>
+    <div><h4>Qué significa</h4><p id="sd2"></p></div>
+    <div><h4>Qué hace el auditor</h4><p id="sd3"></p></div>
+  </div>
+  <p class="flagnote">Nmap distingue seis estados. Además de estos tres existen unfiltered, open|filtered y closed|filtered.</p>
+</section>
+
+<!-- 7 TÉCNICAS -->
+<section class="slide" id="s7" data-title="Técnicas de escaneo">
+  <header class="sh"><h2 class="glitch" data-text="Técnicas de escaneo">Técnicas de escaneo</h2><p class="lead">Siete técnicas habituales. Cada una envía un tipo de paquete distinto.</p></header>
+  <div class="techs" id="techs"></div>
+  <div class="panel tdetail grow">
+    <div>
+      <h3 id="tN"></h3>
+      <pre class="code" id="tC" style="margin-top:.5rem"></pre>
+      <dl>
+        <div><dt>cómo funciona</dt><dd id="tE"></dd></div>
+        <div><dt>para qué se usa</dt><dd id="tP"></dd></div>
+      </dl>
+    </div>
+    <div>
+      <div class="flagnote">Banderas TCP que envía</div>
+      <div class="flags" id="flags"></div>
+      <p class="flagnote" id="tF"></p>
+    </div>
+  </div>
+</section>
+
+<!-- 8 SERVICIOS Y SO -->
+<section class="slide" id="s8" data-title="Servicios y sistema operativo">
+  <header class="sh"><h2 class="glitch" data-text="Detrás de los puertos">Detrás de los puertos</h2><p class="lead">Un puerto abierto es solo el principio. Nmap puede intentar identificar qué hay detrás.</p></header>
+  <div class="s8top"><div id="eyeSvc" class="eye-s"></div></div>
+  <div class="dual">
+    <div class="panel" id="pSV"><div class="scanline"></div>
+      <h3>Detección de servicios y versiones <code>-sV</code></h3>
+      <p class="use">Habla con los puertos abiertos y compara las respuestas con su base de firmas para saber qué programa y versión atiende.</p>
+      <button class="btn" id="runSV">Ejecutar -sV</button>
+      <pre class="term" id="outSV"></pre>
+    </div>
+    <div class="panel" id="pOS"><div class="scanline"></div>
+      <h3>Detección del sistema operativo <code>-O</code></h3>
+      <p class="use">Analiza detalles de cómo responde la pila TCP/IP (la huella) y la compara con una base de datos. Es una estimación y suele requerir privilegios.</p>
+      <button class="btn" id="runOS">Ejecutar -O</button>
+      <pre class="term" id="outOS"></pre>
+    </div>
+  </div>
+  <div class="panel nse">
+    <b>Nmap Scripting Engine (NSE)</b>
+    <span>Scripts en Lua que amplían a Nmap: <code>-sC</code> ejecuta los de categoría default, <code>--script</code> elige otros. Las categorías intrusivas pueden afectar al objetivo: solo con autorización. <code>-A</code> activa -sV, -O, -sC y traceroute.</span>
+  </div>
+</section>
+
+<!-- 9 AUDITORÍA -->
+<section class="slide" id="s9" data-title="Nmap en una auditoría informática">
+  <header class="sh"><h2 class="glitch" data-text="Nmap en una auditoría">Nmap en una auditoría</h2><p class="lead">Se usa sobre todo en la fase de ejecución, para obtener información técnica de la red.</p></header>
+  <div class="timeline" id="timeline"></div>
+  <div class="a9 grow">
+    <div class="panel"><h3 id="phT"></h3><p id="phD"></p><p class="use" id="phN" style="margin-top:.6rem"></p></div>
+    <div class="chk" id="chk"></div>
+  </div>
+  <div class="note"><b>Uso autorizado.</b> Solo se escanean sistemas con permiso escrito y dentro del alcance acordado. Nmap no reemplaza a las herramientas especializadas de análisis de vulnerabilidades.</div>
+</section>
+
+<!-- 10 NMAP VS NESSUS -->
+<section class="slide" id="s10" data-title="Nmap vs Nessus">
+  <header class="sh"><h2 class="glitch" data-text="Nmap vs Nessus">Nmap vs Nessus</h2><p class="lead">Dos herramientas distintas que se complementan. Elige una pregunta del auditor.</p></header>
+  <div class="qs" id="qs"></div>
+  <div class="vs grow">
+    <div class="panel tool" id="tNmap">
+      <h3>NMAP</h3><p class="role">Explora y reconoce</p>
+      <ul><li>Exploración</li><li>Hosts</li><li>Puertos</li><li>Servicios</li><li>Versiones</li><li>Reconocimiento de red</li></ul>
+    </div>
+    <div class="vsmid"><div id="eyeVs" class="eye-s midEye"></div><b class="mono">vs</b></div>
+    <div class="panel tool" id="tNessus">
+      <h3>NESSUS</h3><p class="role">Evalúa vulnerabilidades</p>
+      <ul><li>Evaluación de vulnerabilidades</li><li>Vulnerabilidades conocidas</li><li>Configuraciones</li><li>Riesgos de seguridad</li></ul>
+    </div>
+  </div>
+  <p class="cap" id="vsCap"></p>
+  <div class="together"><span class="a">Nmap descubre y mapea</span><span>+</span><span class="b">Nessus evalúa vulnerabilidades</span><span>=</span><span class="c">el auditor analiza y concluye</span></div>
+</section>
+
+<!-- 11 VENTAJAS Y LIMITACIONES -->
+<section class="slide" id="s11" data-title="Ventajas y limitaciones">
+  <header class="sh"><h2 class="glitch" data-text="Ventajas y limitaciones">Ventajas y limitaciones</h2></header>
+  <div class="pc2 grow">
+    <div class="col pro"><h3>VENTAJAS</h3><ul id="pros"></ul></div>
+    <div class="midEye"><div id="eyeMid" class="eye-s" style="width:clamp(80px,8vw,120px)"></div></div>
+    <div class="col con"><h3>LIMITACIONES</h3><ul id="cons"></ul></div>
+  </div>
+</section>
+
+<!-- 12 CIERRE -->
+<section class="slide s-end" id="s12" data-title="Cierre">
+  <canvas id="closeNet" aria-hidden="true"></canvas>
+  <div id="eyeEnd" class="eye-l"></div>
+  <p class="quote glitch" data-text="Nmap no solo busca puertos. Nos permite ver qué está expuesto en una red.">Nmap no solo busca puertos. Nos permite ver qué está expuesto en una red.</p>
+  <pre class="term endterm" id="endTerm"></pre>
+  <p class="complete" id="complete"></p>
+  <p class="names">Mariel Obregón | Isaías García<small>Auditoría Informática</small></p>
+  <button class="btn" id="rescan">Repetir escaneo</button>
+</section>
+
+</main>
+
+<nav id="nav" aria-label="Navegación de la presentación">
+  <button class="btn" id="prev">Anterior</button>
+  <div id="dots" role="tablist"></div>
+  <button class="btn" id="next">Siguiente</button>
+  <button class="btn" id="menuBtn" title="Tecla M">Índice</button>
+  <button class="btn" id="fxBtn" aria-pressed="true" title="Activa o desactiva scanlines, glitch y fondo animado">Efectos</button>
+  <button class="btn" id="fsBtn" title="Tecla F">Pantalla completa</button>
+</nav>
+<div id="menu" hidden><div class="box panel"><h3>Índice</h3><ol id="menuList"></ol><p class="use" style="margin-top:.8rem">Teclas: flechas o espacio para avanzar, M índice, F pantalla completa, Esc cerrar.</p></div></div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+(() => {
+'use strict';
+/* =========================================================
+   UTILIDADES
+   ========================================================= */
+const $  = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const rand  = (a,b) => a + Math.random()*(b-a);
+const NS = 'http://www.w3.org/2000/svg';
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let fx = !reduceMotion;
+const mouse = {x: innerWidth*.5, y: innerHeight*.4, moved:false};
+addEventListener('pointermove', e => {mouse.x=e.clientX; mouse.y=e.clientY; mouse.moved=true;}, {passive:true});
+addEventListener('pointerdown', e => {mouse.x=e.clientX; mouse.y=e.clientY; mouse.moved=true;}, {passive:true});
+
+/* Temporizadores agrupados: se cancelan al cambiar de diapositiva */
+const T = {
+  g: new Map(),
+  after(group, fn, ms){ const id=setTimeout(()=>{ this._rm(group,id); fn(); }, ms); this._add(group,id,false); return id; },
+  every(group, fn, ms){ const id=setInterval(fn, ms); this._add(group,id,true); return id; },
+  _add(g,id,iv){ if(!this.g.has(g)) this.g.set(g,new Map()); this.g.get(g).set(id,iv); },
+  _rm(g,id){ const m=this.g.get(g); if(m) m.delete(id); },
+  clear(group){ const m=this.g.get(group); if(!m) return; m.forEach((iv,id)=> iv?clearInterval(id):clearTimeout(id)); m.clear(); },
+  clearAll(){ Array.from(this.g.keys()).forEach(k=>this.clear(k)); }
+};
+
+/* Escritura estilo terminal */
+function typeInto(el, lines, group, opts={}){
+  const cps = opts.cps || 110, gap = opts.gap ?? 160;
+  T.clear(group);
+  el.textContent = '';
+  let li=0, ci=0;
+  const step = () => {
+    if(li >= lines.length){ opts.done && opts.done(); return; }
+    const line = lines[li];
+    if(!fx || reduceMotion){ el.textContent += line + '\n'; li++; step(); return; }
+    if(ci < line.length){ const n = 2; el.textContent += line.slice(ci, ci+n); ci += n; T.after(group, step, 1000/cps*n); }
+    else { el.textContent += '\n'; li++; ci=0; T.after(group, step, gap); }
+  };
+  step();
+}
+
+/* =========================================================
+   OJOS TECNOLÓGICOS (SVG + un único bucle rAF)
+   ========================================================= */
+let cur = 0, started = false;
+const eyes = [];
+let uid = 0;
+const ALMOND = 'M12 100 Q200 -60 388 100 Q200 260 12 100 Z';
+
+function eyeMarkup(id){
+  let rays='', nodes='';
+  for(let i=0;i<30;i++){
+    const a=i/30*Math.PI*2, r1=31, r2=i%2?55:66;
+    rays += `<line x1="${(200+Math.cos(a)*r1).toFixed(1)}" y1="${(100+Math.sin(a)*r1).toFixed(1)}" x2="${(200+Math.cos(a)*r2).toFixed(1)}" y2="${(100+Math.sin(a)*r2).toFixed(1)}"/>`;
+  }
+  for(let i=0;i<12;i++){
+    const a=i/12*Math.PI*2+.2;
+    nodes += `<circle cx="${(200+Math.cos(a)*61).toFixed(1)}" cy="${(100+Math.sin(a)*61).toFixed(1)}" r="2.7"/>`;
+  }
+  return `<svg viewBox="0 0 400 200" aria-hidden="true" focusable="false">
+  <defs>
+    <clipPath id="${id}c"><path d="${ALMOND}"/></clipPath>
+    <radialGradient id="${id}g" cx="50%" cy="50%" r="50%">
+      <stop offset=".34" stop-color="#021a1c"/><stop offset=".6" stop-color="#0a5a66"/>
+      <stop offset=".84" stop-color="#19e3d4"/><stop offset="1" stop-color="#8a5cff"/>
+    </radialGradient>
+  </defs>
+  <g clip-path="url(#${id}c)">
+    <rect width="400" height="200" fill="#03100f"/>
+    <g stroke="#134048" stroke-width="1" fill="none"><path d="M20 100H118M282 100H380M52 72L128 92M348 72L272 92M52 128L128 108M348 128L272 108M90 60V82M310 60V82M90 140V118M310 140V118"/></g>
+    <g fill="#1d7077"><circle cx="118" cy="100" r="2.5"/><circle cx="282" cy="100" r="2.5"/><circle cx="52" cy="72" r="2.5"/><circle cx="348" cy="72" r="2.5"/><circle cx="52" cy="128" r="2.5"/><circle cx="348" cy="128" r="2.5"/></g>
+    <g class="iris">
+      <circle cx="200" cy="100" r="72" fill="url(#${id}g)"/>
+      <circle class="spin-a" cx="200" cy="100" r="67" fill="none" stroke="#ff2bd6" stroke-width="2" stroke-dasharray="2 7" opacity=".9"/>
+      <circle class="spin-b" cx="200" cy="100" r="58" fill="none" stroke="#8a5cff" stroke-width="2.4" stroke-dasharray="16 7" opacity=".9"/>
+      <circle class="spin-a" cx="200" cy="100" r="48" fill="none" stroke="#19e3d4" stroke-width="1.6" stroke-dasharray="1 5"/>
+      <circle class="spin-c" cx="200" cy="100" r="40" fill="none" stroke="#ffb23d" stroke-width="1.5" stroke-dasharray="22 9 3 9" opacity=".7"/>
+      <g class="spin-c" stroke="#7dffa6" stroke-width="1" opacity=".55">${rays}</g>
+      <g class="spin-b" fill="#7dffa6">${nodes}</g>
+      <g class="pupil">
+        <circle cx="200" cy="100" r="27" fill="#000" stroke="#19e3d4" stroke-width="1.5"/>
+        <path d="M200 80V92M200 108V120M180 100H192M208 100H220" stroke="#19e3d4" stroke-width="1" opacity=".55"/>
+        <circle cx="191" cy="91" r="4.2" fill="#fff" opacity=".85"/>
+      </g>
+    </g>
+    <rect class="lid-t" x="-10" y="-200" width="420" height="200" fill="#02090b"/>
+    <rect class="lid-b" x="-10" y="200" width="420" height="200" fill="#02090b"/>
+  </g>
+  <path d="${ALMOND}" fill="none" stroke="#19e3d4" stroke-width="2.4"/>
+  <path d="M0 100H12M388 100H400" stroke="#19e3d4" stroke-width="2"/>
+</svg>`;
+}
+
+function createEye(host, o={}){
+  const id = 'ey'+(uid++);
+  host.classList.add('eye');
+  host.innerHTML = eyeMarkup(id);
+  const q = s => host.querySelector(s);
+  const e = {
+    host, slide: o.slide ?? null, strength: o.strength ?? 1,
+    iris:q('.iris'), pupil:q('.pupil'), lt:q('.lid-t'), lb:q('.lid-b'),
+    x:0, y:0, z:1, p:1, zT:1, pT:1, lid:o.closed?1:0, lidT:0, squint:0,
+    target:null, nextBlink: performance.now()/1000 + 2 + Math.random()*3, blinkStart:-1
+  };
+  e.look   = t => { e.target = t || null; };
+  e.zoom   = (z, p=1) => { e.zT = z; e.pT = p; };
+  e.squintTo = v => { e.squint = v; };
+  e.wake   = () => { e.lid = 1; e.lidT = 0; };
+  e.blink  = () => { e.blinkStart = performance.now()/1000; };
+  eyes.push(e);
+  return e;
+}
+
+let lastT = performance.now()/1000;
+function tick(){
+  const now = performance.now()/1000;
+  const dt = Math.min(.05, now - lastT); lastT = now;
+  const k  = 1 - Math.exp(-dt*9);
+  const kl = 1 - Math.exp(-dt*3.2);
+  for(const e of eyes){
+    if(e.slide !== null && e.slide !== cur) continue;
+    const r = e.host.getBoundingClientRect();
+    if(!r.width) continue;
+    const cx = r.left + r.width/2, cy = r.top + r.height/2;
+    let gx, gy;
+    if(!e.target && !mouse.moved){
+      gx = Math.sin(now*.6)*.5; gy = Math.sin(now*.9)*.3;
+    } else {
+      let tx = mouse.x, ty = mouse.y;
+      if(e.target){
+        if(e.target.getBoundingClientRect){ const b=e.target.getBoundingClientRect(); tx=b.left+b.width/2; ty=b.top+b.height/2; }
+        else { tx=e.target.x; ty=e.target.y; }
+      }
+      gx = clamp((tx-cx)/(r.width*.7), -1, 1);
+      gy = clamp((ty-cy)/(r.width*.42), -1, 1);
+    }
+    e.x += (gx*58*e.strength - e.x)*k;
+    e.y += (gy*26*e.strength - e.y)*k;
+    e.z += (e.zT - e.z)*k;
+    e.p += (e.pT - e.p)*k;
+    e.lid += (e.lidT - e.lid)*kl;
+    if(now > e.nextBlink && e.blinkStart < 0){ e.blinkStart = now; e.nextBlink = now + 2.6 + Math.random()*4.5; }
+    let b = 0;
+    if(e.blinkStart >= 0){
+      const u = (now - e.blinkStart)/.22;
+      if(u >= 1) e.blinkStart = -1; else b = Math.sin(u*Math.PI);
+    }
+    const c = Math.max(e.lid, b, e.squint*.5);
+    e.iris.setAttribute('transform', `translate(${(200+e.x).toFixed(2)} ${(100+e.y).toFixed(2)}) scale(${e.z.toFixed(3)}) translate(-200 -100)`);
+    e.pupil.setAttribute('transform', `translate(200 100) scale(${e.p.toFixed(3)}) translate(-200 -100) translate(${(e.x*.14).toFixed(2)} ${(e.y*.14).toFixed(2)})`);
+    e.lt.setAttribute('y', (c*104-200).toFixed(1));
+    e.lb.setAttribute('y', (200-c*104).toFixed(1));
+  }
+  requestAnimationFrame(tick);
+}
+
+/* =========================================================
+   FONDO DE RED (global, ligero)
+   ========================================================= */
+const bg = $('#bg'), bx = bg.getContext('2d');
+let bgNodes = [], bw=0, bh=0;
+function bgResize(){
+  const d = Math.min(devicePixelRatio||1, 2);
+  bw = innerWidth; bh = innerHeight;
+  bg.width = bw*d; bg.height = bh*d; bx.setTransform(d,0,0,d,0,0);
+  const n = Math.round(clamp(bw*bh/26000, 24, 70));
+  bgNodes = Array.from({length:n}, () => ({x:rand(0,bw), y:rand(0,bh), vx:rand(-.12,.12), vy:rand(-.12,.12)}));
+}
+function bgDraw(){
+  bx.clearRect(0,0,bw,bh);
+  if(fx){
+    for(const n of bgNodes){
+      n.x += n.vx; n.y += n.vy;
+      if(n.x<0||n.x>bw) n.vx*=-1; if(n.y<0||n.y>bh) n.vy*=-1;
+    }
+    for(let i=0;i<bgNodes.length;i++){
+      const a = bgNodes[i];
+      for(let j=i+1;j<bgNodes.length;j++){
+        const b = bgNodes[j], dx=a.x-b.x, dy=a.y-b.y, d=dx*dx+dy*dy;
+        if(d < 18000){
+          const m = Math.hypot((a.x+b.x)/2-mouse.x, (a.y+b.y)/2-mouse.y);
+          const boost = m < 180 ? (1-m/180)*.35 : 0;
+          bx.strokeStyle = `rgba(25,227,212,${(.09*(1-d/18000)+boost).toFixed(3)})`;
+          bx.beginPath(); bx.moveTo(a.x,a.y); bx.lineTo(b.x,b.y); bx.stroke();
+        }
+      }
+      bx.fillStyle = 'rgba(25,227,212,.35)';
+      bx.fillRect(a.x-1, a.y-1, 2, 2);
+    }
+  }
+  requestAnimationFrame(bgDraw);
+}
+
+/* =========================================================
+   NAVEGACIÓN
+   ========================================================= */
+const slides = $$('.slide');
+const enter = {}, leave = {};
+const total = slides.length;
+const dotsEl = $('#dots'), menuList = $('#menuList');
+slides.forEach((s,i) => {
+  const d = document.createElement('button');
+  d.setAttribute('aria-label', `Ir a ${i+1}: ${s.dataset.title}`);
+  d.dataset.tip = `${i+1}. ${s.dataset.title}`;
+  d.addEventListener('click', () => go(i));
+  dotsEl.appendChild(d);
+  const li = document.createElement('li');
+  li.innerHTML = `<button><span>${String(i+1).padStart(2,'0')}</span>${s.dataset.title}</button>`;
+  li.firstChild.addEventListener('click', () => { closeMenu(); go(i); });
+  menuList.appendChild(li);
+});
+const seen = new Set();
+
+function go(n){
+  n = clamp(n, 0, total-1);
+  if(started && n === cur) return;
+  if(started && leave[cur]) leave[cur]();
+  T.clearAll();
+  if(started) slides[cur].classList.remove('active');
+  cur = n; started = true;
+  slides[cur].classList.add('active');
+  slides[cur].scrollTop = 0;
+  seen.add(cur);
+  $('#progress').style.width = ((cur+1)/total*100)+'%';
+  $('#hudN').innerHTML = `<b>${String(cur+1).padStart(2,'0')}</b> / ${total}`;
+  $('#hudT').textContent = slides[cur].dataset.title;
+  $$('#dots button').forEach((d,i) => { d.classList.toggle('on', i===cur); d.classList.toggle('seen', i!==cur && seen.has(i)); });
+  $$('#menuList button').forEach((b,i) => b.classList.toggle('on', i===cur));
+  $('#prev').disabled = cur===0; $('#next').disabled = cur===total-1;
+  $('#prev').style.opacity = cur===0 ? .4 : 1; $('#next').style.opacity = cur===total-1 ? .4 : 1;
+  if(location.hash !== '#'+(cur+1)) history.replaceState(null,'','#'+(cur+1));
+  glitchNow();
+  if(enter[cur]) enter[cur]();
+}
+const next = () => go(cur+1), prev = () => go(cur-1);
+$('#next').addEventListener('click', next);
+$('#prev').addEventListener('click', prev);
+
+function openMenu(){ $('#menu').hidden = false; $$('#menuList button')[cur].focus(); }
+function closeMenu(){ $('#menu').hidden = true; }
+$('#menuBtn').addEventListener('click', () => $('#menu').hidden ? openMenu() : closeMenu());
+$('#menu').addEventListener('click', e => { if(e.target.id==='menu') closeMenu(); });
+
+$('#fxBtn').addEventListener('click', e => {
+  fx = !fx;
+  e.currentTarget.setAttribute('aria-pressed', String(fx));
+  document.documentElement.classList.toggle('nofx', !fx);
+});
+$('#fsBtn').addEventListener('click', () => {
+  try{
+    if(document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen();
+  }catch(_){}
+});
+if(reduceMotion){ document.documentElement.classList.add('nofx'); $('#fxBtn').setAttribute('aria-pressed','false'); }
+
+addEventListener('keydown', e => {
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
+  const tag = (e.target.tagName||'').toLowerCase();
+  const onBtn = tag === 'button';
+  switch(e.key){
+    case 'ArrowRight': case 'PageDown': e.preventDefault(); next(); break;
+    case 'ArrowLeft':  case 'PageUp':   e.preventDefault(); prev(); break;
+    case ' ': if(!onBtn){ e.preventDefault(); next(); } break;
+    case 'Home': go(0); break;
+    case 'End': go(total-1); break;
+    case 'm': case 'M': $('#menu').hidden ? openMenu() : closeMenu(); break;
+    case 'f': case 'F': $('#fsBtn').click(); break;
+    case 'Escape': closeMenu(); break;
+  }
+});
+addEventListener('hashchange', () => { const n = parseInt(location.hash.slice(1),10); if(n>=1 && n<=total) go(n-1); });
+let tx0=null, ty0=0;
+$('#deck').addEventListener('touchstart', e => { tx0=e.touches[0].clientX; ty0=e.touches[0].clientY; }, {passive:true});
+$('#deck').addEventListener('touchend', e => {
+  if(tx0===null) return;
+  const dx = e.changedTouches[0].clientX - tx0, dy = e.changedTouches[0].clientY - ty0;
+  if(Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy)*1.6) dx<0 ? next() : prev();
+  tx0=null;
+}, {passive:true});
+
+/* Glitch controlado: al entrar y cada pocos segundos */
+function glitchNow(){
+  if(!fx) return;
+  $$('.slide.active .glitch').forEach(el => { el.classList.add('gl'); setTimeout(() => el.classList.remove('gl'), 440); });
+}
+setInterval(() => { if(!document.hidden) glitchNow(); }, 9000);
+
+/* Tooltips */
+const tip = $('#tip');
+document.addEventListener('pointerover', e => {
+  const t = e.target.closest('[data-tip]');
+  if(!t){ tip.classList.remove('on'); return; }
+  tip.textContent = t.dataset.tip; tip.classList.add('on');
+});
+document.addEventListener('pointermove', e => {
+  if(!tip.classList.contains('on')) return;
+  tip.style.left = clamp(e.clientX+14, 8, innerWidth-tip.offsetWidth-8)+'px';
+  tip.style.top  = clamp(e.clientY-40, 8, innerHeight-tip.offsetHeight-8)+'px';
+});
+
+/* Helper: lista de botones seleccionables (clic + teclado nativo) */
+function makeSelectable(btns, onSel, hover=false){
+  btns.forEach((b,i) => {
+    b.addEventListener('click', () => onSel(i, true));
+    if(hover) b.addEventListener('pointerenter', () => onSel(i, false));
+    b.addEventListener('focus', () => { if(hover) onSel(i,false); });
+  });
+}
+
+/* =========================================================
+   1 PORTADA
+   ========================================================= */
+const eyeCover = createEye($('#eyeCover'), {slide:0, closed:true});
+const coverNodes = [];
+(function buildCoverNet(){
+  const svg = $('#coverNet');
+  const labels = ['192.168.1.1','22/tcp','80/tcp','10.0.0.14','443/tcp','53/udp','192.168.1.20','3306/tcp','0x7F000001','8080/tcp','192.168.1.35','445/tcp','TTL=64','ICMP echo'];
+  const mk = (n, attrs) => { const el=document.createElementNS(NS,n); for(const k in attrs) el.setAttribute(k,attrs[k]); return el; };
+  const pts = [];
+  for(let i=0;i<labels.length;i++){
+    const a = i/labels.length*Math.PI*2 + rand(-.15,.15);
+    const rx = rand(300,470), ry = rand(190,260);
+    pts.push({x:Math.cos(a)*rx, y:Math.sin(a)*ry, t:labels[i]});
+  }
+  pts.forEach((p,i) => {
+    const g = mk('g', {class:'cnode'});
+    const ln = mk('line', {x1:0,y1:0,x2:p.x,y2:p.y,stroke:'#19e3d4','stroke-opacity':.28,'stroke-width':1.2,class:'flow'});
+    const nb = pts[(i+1)%pts.length];
+    const l2 = mk('line', {x1:p.x,y1:p.y,x2:nb.x,y2:nb.y,stroke:'#8a5cff','stroke-opacity':.22,'stroke-width':1});
+    const c = mk('circle', {cx:p.x,cy:p.y,r:4,fill:'#04080b',stroke:i%3===0?'#ff2bd6':'#19e3d4','stroke-width':1.6});
+    const left = p.x < 0;
+    const tx = mk('text', {x:p.x+(left?-10:10), y:p.y+4, 'text-anchor':left?'end':'start','font-size':13,fill:'#93b4b8','font-family':'JetBrains Mono, monospace'});
+    tx.textContent = p.t;
+    g.append(ln,l2,c,tx);
+    svg.appendChild(g); coverNodes.push(g);
+  });
+})();
+enter[0] = () => {
+  eyeCover.wake();
+  coverNodes.forEach(n => n.classList.remove('on'));
+  coverNodes.forEach((n,i) => T.after('s1', () => n.classList.add('on'), 1300 + i*170));
+  typeInto($('#boot'), ['$ nmap -sS -sV 192.168.1.0/24   # red de laboratorio, con autorización'], 's1b', {cps:60});
+  T.after('s1', () => eyeCover.blink(), 2300);
+};
+leave[0] = () => {};
+
+/* =========================================================
+   2 QUÉ ES
+   ========================================================= */
+const eyeWhat = createEye($('#eyeWhat'), {slide:1});
+const DEVS = [
+  {n:'Router', ip:'192.168.1.1', p:[[80,'http'],[443,'https'],[53,'domain']]},
+  {n:'Servidor web', ip:'192.168.1.20', p:[[22,'ssh'],[80,'http'],[443,'https']]},
+  {n:'PC de oficina', ip:'192.168.1.35', p:[[135,'msrpc'],[445,'microsoft-ds']]},
+  {n:'Impresora', ip:'192.168.1.50', p:[[631,'ipp'],[9100,'jetdirect']]}
+];
+const CHAIN = [
+  ['NMAP','Nmap es el punto de observación: genera las pruebas y lee lo que vuelve.'],
+  ['RED','Se indica la red o el rango a explorar, por ejemplo 192.168.1.0/24.'],
+  ['DISPOSITIVOS','Primero averigua qué equipos están activos (descubrimiento de hosts).'],
+  ['PUERTOS','En cada equipo prueba puertos para ver cuáles responden.'],
+  ['SERVICIOS','En los puertos abiertos intenta identificar qué servicio atiende.']
+];
+const devicesEl = $('#devices'), chainEl = $('#chain');
+devicesEl.innerHTML = DEVS.map(d => `<div class="dev"><div class="dn"><b>${d.n}</b><span class="ip">${d.ip}</span><em class="up">host up</em></div><div class="dp">${d.p.map(p=>`<span class="pc"><i>${p[0]}</i><u>${p[1]}</u></span>`).join('')}</div></div>`).join('');
+const devEls = $$('.dev', devicesEl);
+CHAIN.forEach((c,i) => { const b=document.createElement('button'); b.className='chip'; b.textContent=c[0]; chainEl.appendChild(b); });
+const chips = $$('.chip', chainEl);
+let stage2 = 0, auto2 = true;
+function beamTo(el){
+  const line = $('#beamLine'), box = $('#scanbox').getBoundingClientRect();
+  if(!el){ line.setAttribute('opacity','0'); return; }
+  const a = $('#eyeWhat').getBoundingClientRect(), b = el.getBoundingClientRect();
+  if(box.width < 50 || getComputedStyle($('#scanbox')).gridTemplateColumns.split(' ').length < 2){ line.setAttribute('opacity','0'); return; }
+  line.setAttribute('x1', a.right - box.left - 6); line.setAttribute('y1', a.top + a.height/2 - box.top);
+  line.setAttribute('x2', b.left - box.left); line.setAttribute('y2', b.top + b.height/2 - box.top);
+  line.setAttribute('opacity','.9');
+}
+function setStage2(n, user){
+  if(user) auto2 = false;
+  stage2 = n;
+  T.clear('s2eye');
+  chips.forEach((c,i) => { c.classList.toggle('on', i===n); c.classList.toggle('done', i<n); });
+  ['g1','g2','g3','g4'].forEach((g,i) => devicesEl.classList.toggle(g, n >= i+1));
+  $('#chainCap').textContent = CHAIN[n][1];
+  devEls.forEach(d => d.classList.remove('look'));
+  beamTo(null);
+  if(n === 0){ eyeWhat.look(chips[0]); eyeWhat.zoom(1.1,1.1); }
+  else if(n === 1){ eyeWhat.look(null); eyeWhat.zoom(1,1); }
+  else if(n === 2){
+    let i = 0;
+    const lookDev = () => { devEls.forEach(d=>d.classList.remove('look')); const d=devEls[i%devEls.length]; d.classList.add('look'); eyeWhat.look(d); beamTo(d); i++; };
+    lookDev(); T.every('s2eye', lookDev, 650); eyeWhat.zoom(1.05,1);
+  } else { const d = devEls[n===3?1:0]; d.classList.add('look'); eyeWhat.look(d); beamTo(d); eyeWhat.zoom(1.15, n===4?.85:1); }
+}
+makeSelectable(chips, (i, click) => setStage2(i, true), false);
+chips.forEach((c,i) => c.addEventListener('pointerenter', () => setStage2(i, true)));
+enter[1] = () => {
+  auto2 = true; setStage2(0); eyeWhat.wake();
+  T.every('s2', () => { if(auto2) setStage2((stage2+1)%CHAIN.length); }, 3400);
+};
+leave[1] = () => { eyeWhat.look(null); eyeWhat.zoom(1,1); };
+addEventListener('resize', () => { if(cur===1) setStage2(stage2); });
+
+/* =========================================================
+   3 PARA QUÉ SIRVE
+   ========================================================= */
+const eyeFn = createEye($('#eyeFn'), {slide:2});
+const FN = [
+  {t:'Descubrimiento de dispositivos', c:'nmap -sn 192.168.1.0/24', d:'Averigua qué equipos están activos en un rango de red, sin escanear sus puertos.', u:'Sirve para el inventario de activos.'},
+  {t:'Escaneo de puertos', c:'nmap -p 22,80,443 192.168.1.20', d:'Prueba puertos y clasifica cada uno como abierto, cerrado o filtrado.', u:'Sirve para saber qué puertas están expuestas.'},
+  {t:'Detección de servicios', c:'nmap -sV 192.168.1.20', d:'Interroga los puertos abiertos para saber qué servicio responde de verdad, sin fiarse solo del número.', u:'Sirve para confirmar qué hay detrás de cada puerto.'},
+  {t:'Detección de versiones', c:'nmap -sV --version-intensity 9 192.168.1.20', d:'Va un paso más allá del nombre: intenta obtener producto y versión, por ejemplo Apache httpd 2.4.52. Forma parte de -sV.', u:'Sirve para saber si el software está actualizado.'},
+  {t:'Detección del sistema operativo', c:'sudo nmap -O 192.168.1.20', d:'Compara las respuestas del equipo con una base de huellas para estimar su sistema operativo. Es una estimación.', u:'Sirve para completar el inventario técnico.'},
+  {t:'Auditoría de redes', c:'sudo nmap -sS -sV -O -oN evidencia.txt 192.168.1.0/24', d:'Combina las funciones anteriores y guarda los resultados en un archivo.', u:'Sirve para obtener evidencia técnica para el informe.'}
+];
+const fnList = $('#fnList');
+fnList.innerHTML = FN.map((f,i) => `<button class="fnb"><span>${f.t}</span><span class="fc">${f.c.split(' ').filter(x=>/^-/.test(x)).slice(0,2).join(' ')}</span></button>`).join('');
+const fnBtns = $$('.fnb', fnList);
+function selFn(i){
+  fnBtns.forEach((b,j) => b.classList.toggle('sel', i===j));
+  const f = FN[i];
+  $('#fnT').textContent = f.t; $('#fnD').textContent = f.d; $('#fnC').textContent = '$ ' + f.c; $('#fnU').textContent = f.u;
+  eyeFn.look(fnBtns[i]); eyeFn.zoom(1.12,1); T.after('s3z', () => eyeFn.zoom(1,1), 500);
+}
+makeSelectable(fnBtns, selFn);
+enter[2] = () => { selFn(0); eyeFn.wake(); };
+
+/* =========================================================
+   4 CÓMO FUNCIONA
+   ========================================================= */
+const eyeFlow = createEye($('#eyeFlow'), {slide:3});
+const STEPS = [
+  {t:'Objetivo', d:'Se define qué se va a auditar: una IP, un nombre de host o un rango. Debe estar dentro del alcance autorizado.', o:'$ nmap 192.168.1.20\nStarting Nmap ...'},
+  {t:'Nmap envía paquetes', d:'Construye y envía paquetes de prueba (por ejemplo TCP SYN) a distintos puertos del objetivo.', o:'SYN  -> 22\nSYN  -> 80\nSYN  -> 443\nSYN  -> 8080'},
+  {t:'El dispositivo responde', d:'Cada puerto reacciona distinto: acepta, rechaza o no contesta si algo lo filtra.', o:'22   <- SYN/ACK  (acepta)\n23   <- RST      (rechaza)\n8080 <- ...      (sin respuesta)'},
+  {t:'Nmap analiza las respuestas', d:'Interpreta banderas TCP, tiempos y contenido para decidir el estado de cada puerto. Con -sV y -O profundiza.', o:'SYN/ACK  => open\nRST      => closed\nsilencio => filtered'},
+  {t:'Se generan resultados', d:'Se muestra la tabla de puertos y puede guardarse como evidencia (-oN, -oX).', o:'PORT      STATE    SERVICE\n22/tcp    open     ssh\n80/tcp    open     http\n443/tcp   open     https\n8080/tcp  filtered http-proxy'}
+];
+const stepsEl = $('#steps');
+stepsEl.innerHTML = STEPS.map((s,i) => `<button class="stp"><small>${i+1}</small>${s.t}</button>`).join('');
+const stpBtns = $$('.stp', stepsEl);
+let step4 = 0, auto4 = true;
+function setStep4(i, user){
+  if(user) auto4 = false;
+  step4 = i;
+  stpBtns.forEach((b,j) => b.classList.toggle('sel', i===j));
+  $('#s4t').textContent = `${i+1}. ${STEPS[i].t}`; $('#s4d').textContent = STEPS[i].d; $('#s4o').textContent = STEPS[i].o;
+  eyeFlow.look(i===2 ? {x:innerWidth*.8,y:innerHeight*.3} : (i===1 ? {x:innerWidth*.8,y:innerHeight*.3} : null));
+  eyeFlow.zoom(i===3 ? 1.2 : 1, i===3 ? .8 : 1);
+  eyeFlow.squintTo(i===3 ? .3 : 0);
+}
+makeSelectable(stpBtns, (i,c) => setStep4(i, true), true);
+const pk = $('#pk'), px = pk.getContext('2d');
+let packets = [], spawnT = 0, raf4 = 0, last4 = 0, W4=0, H4=0;
+function size4(){
+  const r = pk.parentElement.getBoundingClientRect(), d = Math.min(devicePixelRatio||1,2);
+  W4 = r.width; H4 = r.height; pk.width = W4*d; pk.height = H4*d; px.setTransform(d,0,0,d,0,0);
+}
+const PK_OUT = ['SYN > 22','SYN > 80','SYN > 443','SYN > 8080'];
+const PK_IN  = [['SYN/ACK','#7dffa6'],['RST','#ff5d6c'],['SYN/ACK','#7dffa6']];
+function draw4(ts){
+  const t = ts/1000, dt = Math.min(.05, t-last4); last4 = t;
+  px.clearRect(0,0,W4,H4);
+  const ax = W4*.25, bx2 = W4*.8, y = H4*.5, fs = Math.max(10, Math.min(14, W4/70));
+  // línea
+  px.strokeStyle = 'rgba(25,227,212,.35)'; px.setLineDash([6,6]); px.lineWidth = 1.5;
+  px.beginPath(); px.moveTo(ax, y); px.lineTo(bx2, y); px.stroke(); px.setLineDash([]);
+  // objetivo
+  const bh2 = Math.min(H4*.7, 110), bw2 = Math.min(W4*.1, 84);
+  px.fillStyle = '#06161b'; px.strokeStyle = '#19e3d4'; px.lineWidth = 2;
+  px.fillRect(bx2, y-bh2/2, bw2, bh2); px.strokeRect(bx2, y-bh2/2, bw2, bh2);
+  for(let i=0;i<5;i++){ px.fillStyle = (i===1||i===3) ? '#7dffa6' : '#1e5a60'; px.fillRect(bx2+8, y-bh2/2+10+i*(bh2-20)/5, bw2-16, 5); }
+  px.fillStyle = '#93b4b8'; px.font = fs+'px JetBrains Mono, monospace'; px.textAlign='center';
+  px.fillText('192.168.1.20', bx2+bw2/2, y-bh2/2-8);
+  px.fillText('objetivo', bx2+bw2/2, y+bh2/2+fs+4);
+  px.fillText('Nmap', ax-W4*.04, y+Math.min(H4*.36,70)+fs);
+  // pulso del objetivo (paso 1)
+  if(step4 === 0){
+    const p = (t%1.6)/1.6; px.strokeStyle = `rgba(25,227,212,${(1-p).toFixed(2)})`; px.lineWidth = 2;
+    px.strokeRect(bx2-6-p*30, y-bh2/2-6-p*30, bw2+12+p*60, bh2+12+p*60);
+  }
+  // análisis (paso 4)
+  if(step4 === 3){
+    const sx = ax + ((t*.6)%1)*(bx2-ax)*.35; px.strokeStyle = '#ffb23d'; px.lineWidth = 2;
+    px.beginPath(); px.moveTo(sx, y-40); px.lineTo(sx, y+40); px.stroke();
+    px.fillStyle = '#ffb23d'; px.textAlign = 'left'; px.fillText('analizando respuestas...', ax+8, y-52);
+  }
+  // paquetes
+  spawnT -= dt;
+  if(step4 === 1 || step4 === 2 || step4 === 3){
+    if(spawnT <= 0 && fx || (spawnT <= 0 && packets.length < 3)){
+      spawnT = step4 === 3 ? .9 : .6;
+      if(step4 === 1) packets.push({dir:1, x:ax, l:PK_OUT[Math.floor(rand(0,PK_OUT.length))], c:'#19e3d4'});
+      else if(step4 === 2){ const r = PK_IN[Math.floor(rand(0,PK_IN.length))]; packets.push({dir:-1, x:bx2, l:r[0], c:r[1]}); }
+      else packets.push({dir:-1, x:bx2, l:'datos', c:'#ffb23d'});
+    }
+  } else spawnT = .2;
+  const speed = (bx2-ax)/1.6;
+  px.textAlign = 'center'; px.font = fs+'px JetBrains Mono, monospace';
+  packets = packets.filter(p => p.x >= ax-5 && p.x <= bx2+5);
+  for(const p of packets){
+    p.x += p.dir*speed*dt*(step4===3?.5:1);
+    px.fillStyle = p.c; px.fillRect(p.x-6, y-6, 12, 12);
+    px.shadowColor = p.c; px.shadowBlur = 10; px.fillRect(p.x-6, y-6, 12, 12); px.shadowBlur = 0;
+    px.fillStyle = '#eef7f7'; px.fillText(p.l, p.x, y-14);
+  }
+  // paso 5
+  if(step4 === 4){
+    px.fillStyle = '#7dffa6'; px.textAlign = 'center';
+    px.fillText('evidencia.txt', (ax+bx2)/2, y-12);
+    px.strokeStyle = '#7dffa6'; px.strokeRect((ax+bx2)/2-44, y, 88, 26);
+    px.fillText('3 abiertos / 1 filtrado', (ax+bx2)/2, y+18);
+  }
+  raf4 = requestAnimationFrame(draw4);
+}
+enter[3] = () => {
+  size4(); eyeFlow.wake(); auto4 = true; packets = []; setStep4(0);
+  last4 = performance.now()/1000; cancelAnimationFrame(raf4); raf4 = requestAnimationFrame(draw4);
+  T.every('s4', () => { if(auto4) setStep4((step4+1)%STEPS.length); }, 4600);
+};
+leave[3] = () => cancelAnimationFrame(raf4);
+addEventListener('resize', () => { if(cur===3) size4(); });
+
+/* =========================================================
+   5 PUERTOS
+   ========================================================= */
+const eyePorts = createEye($('#eyePorts'), {slide:4});
+const PORTS = [
+  [21,'FTP','Transferencia de archivos. Por defecto no cifra el tráfico.',1],
+  [22,'SSH','Acceso remoto cifrado a un equipo (administración).',1],
+  [23,'Telnet','Acceso remoto sin cifrar. Hoy se considera inseguro.',0],
+  [25,'SMTP','Envío de correo entre servidores.',0],
+  [53,'DNS','Traduce nombres de dominio a direcciones IP.',1],
+  [80,'HTTP','Páginas web sin cifrar.',1],
+  [110,'POP3','Recepción de correo electrónico.',0],
+  [443,'HTTPS','Páginas web cifradas con TLS.',1],
+  [445,'SMB','Archivos e impresoras compartidos en redes Windows.',0],
+  [3306,'MySQL','Base de datos MySQL.',0],
+  [3389,'RDP','Escritorio remoto de Windows.',0],
+  [8080,'HTTP alterno','Puerto alterno muy usado para servidores web y proxies.',0]
+];
+const portsEl = $('#ports');
+portsEl.innerHTML = PORTS.map(p => `<button class="port${p[3]?' key':''}" data-tip="${p[0]} → ${p[1]}">${p[0]}</button>`).join('');
+const portBtns = $$('.port', portsEl);
+function selPort(i){
+  portBtns.forEach((b,j) => b.classList.toggle('sel', i===j));
+  const p = PORTS[i];
+  $('#pNum').textContent = p[0]; $('#pSvc').textContent = p[1]; $('#pTxt').textContent = 'Uso habitual: ' + p[2];
+  eyePorts.look(portBtns[i]); eyePorts.zoom(1.15,1);
+}
+makeSelectable(portBtns, selPort, true);
+let cmp = 0;
+function setCmp(v){
+  cmp = v;
+  $('#cmpA').classList.toggle('sel', v===0); $('#cmpB').classList.toggle('sel', v===1);
+  $('#cmpOut').textContent = v===0 ? 'PORT    STATE SERVICE\n80/tcp  open  http' : 'PORT    STATE SERVICE VERSION\n80/tcp  open  ssh     OpenSSH 8.9p1';
+  $('#cmpTxt').textContent = v===0
+    ? 'Sin -sV, Nmap muestra el nombre habitual del puerto según su lista de servicios. Es una suposición basada en el número.'
+    : 'Con -sV, Nmap habla con el puerto y descubre que, en este ejemplo, el administrador puso SSH en el puerto 80.';
+}
+$('#cmpA').addEventListener('click', () => setCmp(0));
+$('#cmpB').addEventListener('click', () => setCmp(1));
+enter[4] = () => { selPort(1); setCmp(0); eyePorts.wake(); };
+leave[4] = () => eyePorts.look(null);
+
+/* =========================================================
+   6 ESTADOS
+   ========================================================= */
+const eyeStates = createEye($('#eyeStates'), {slide:5});
+const STATES = {
+  open:     {a:'22/tcp  open  ssh\n→ SYN\n← SYN/ACK', b:'Hay una aplicación escuchando y aceptando conexiones en ese puerto.', c:'Revisa si ese servicio debe estar expuesto, quién lo usa y si su versión es adecuada.'},
+  closed:   {a:'23/tcp  closed telnet\n→ SYN\n← RST', b:'El equipo es alcanzable, pero ninguna aplicación escucha en ese puerto.', c:'Lo toma como señal de que el equipo está activo. No suele requerir acción por sí solo.'},
+  filtered: {a:'8080/tcp filtered http-proxy\n→ SYN\n← (sin respuesta)', b:'Nmap no puede saber si está abierto: un firewall u otro filtro bloquea o descarta las pruebas.', c:'No lo da por seguro: solo es un puerto que no se pudo ver. Puede revisar las reglas del firewall.'}
+};
+const stcs = $$('.stc');
+function selState(i){
+  stcs.forEach((b,j) => b.classList.toggle('sel', i===j));
+  const k = stcs[i].dataset.s, s = STATES[k];
+  $('#sd1').textContent = s.a; $('#sd2').textContent = s.b; $('#sd3').textContent = s.c;
+  eyeStates.look(stcs[i]);
+  eyeStates.zoom(k==='open'?1.2:1, k==='open'?1.15:1);
+  eyeStates.squintTo(k==='filtered' ? .8 : (k==='closed' ? .2 : 0));
+}
+makeSelectable(stcs, selState);
+enter[5] = () => { selState(0); eyeStates.wake(); };
+leave[5] = () => { eyeStates.squintTo(0); eyeStates.look(null); };
+
+/* =========================================================
+   7 TÉCNICAS
+   ========================================================= */
+const TECH = [
+  {f:'-sS', n:'TCP SYN Scan', e:'Envía un SYN y espera. Si recibe SYN/ACK, el puerto está abierto; si recibe RST, cerrado; si no hay respuesta, filtrado. No completa la conexión (half-open).', p:'Es la técnica por defecto cuando hay privilegios. Rápida y muy usada para un primer panorama.', fl:['SYN'], nt:'Solo SYN. Requiere paquetes raw (root o administrador).'},
+  {f:'-sT', n:'TCP Connect Scan', e:'Usa la llamada connect() del sistema operativo y completa el saludo de tres pasos (SYN, SYN/ACK, ACK).', p:'Se usa cuando no hay privilegios. Es más lenta y deja más rastro en los registros del servicio.', fl:['SYN','ACK'], nt:'Conexión completa: SYN, SYN/ACK y ACK.'},
+  {f:'-sU', n:'UDP Scan', e:'Envía datagramas UDP. Una respuesta indica abierto; un ICMP "port unreachable" indica cerrado; el silencio deja el puerto como open|filtered.', p:'Para revisar servicios UDP como DNS (53), SNMP (161) o DHCP. Es lenta.', fl:[], nt:'UDP no usa banderas TCP: se envían datagramas.'},
+  {f:'-sA', n:'ACK Scan', e:'Envía paquetes con ACK. No determina si un puerto está abierto: clasifica los puertos como unfiltered o filtered.', p:'Para estudiar las reglas de un firewall y ver si es con estado (stateful).', fl:['ACK'], nt:'Solo ACK.'},
+  {f:'-sF', n:'FIN Scan', e:'Envía solo FIN. Según el estándar TCP, un puerto cerrado responde RST y uno abierto ignora el paquete (open|filtered).', p:'Para sondear filtros sin estado. No funciona en sistemas que no siguen el estándar (como Windows).', fl:['FIN'], nt:'Solo FIN.'},
+  {f:'-sN', n:'NULL Scan', e:'Envía un paquete TCP sin ninguna bandera. Usa la misma lógica de respuestas que FIN: RST indica cerrado; silencio indica open|filtered.', p:'Para probar reglas de firewall y filtros sin estado. Los resultados dependen del sistema objetivo.', fl:[], nt:'Ninguna bandera activa.'},
+  {f:'-sX', n:'Xmas Scan', e:'Envía un paquete con FIN, PSH y URG activados ("iluminado como un árbol de Navidad"). Misma lógica de respuestas que FIN y NULL.', p:'Para probar filtros sin estado. Poco fiable en sistemas que no siguen el estándar.', fl:['FIN','PSH','URG'], nt:'FIN, PSH y URG activas.'}
+];
+const FLAGS = ['URG','ACK','PSH','RST','SYN','FIN'];
+$('#flags').innerHTML = FLAGS.map(f => `<div class="flag" data-f="${f}">${f}</div>`).join('');
+const techsEl = $('#techs');
+techsEl.innerHTML = TECH.map(t => `<button class="tc"><span class="fl">${t.f}</span><span class="nm">${t.n}</span></button>`).join('');
+const tcBtns = $$('.tc', techsEl);
+function selTech(i){
+  tcBtns.forEach((b,j) => b.classList.toggle('sel', i===j));
+  const t = TECH[i];
+  $('#tN').textContent = t.n; $('#tC').textContent = `$ sudo nmap ${t.f} 192.168.1.20`;
+  $('#tE').textContent = t.e; $('#tP').textContent = t.p; $('#tF').textContent = t.nt;
+  $$('.flag').forEach(f => f.classList.toggle('on', t.fl.includes(f.dataset.f)));
+}
+makeSelectable(tcBtns, selTech);
+enter[6] = () => selTech(0);
+
+/* =========================================================
+   8 SERVICIOS Y SO
+   ========================================================= */
+const eyeSvc = createEye($('#eyeSvc'), {slide:7});
+const OUT_SV = ['$ nmap -sV 192.168.1.20', 'PORT     STATE SERVICE  VERSION', '22/tcp   open  ssh      OpenSSH 8.9p1 Ubuntu', '80/tcp   open  http     Apache httpd 2.4.52', '443/tcp  open  ssl/http Apache httpd 2.4.52', '(salida de ejemplo)'];
+const OUT_OS = ['$ sudo nmap -O 192.168.1.20', 'Device type: general purpose', 'Running: Linux 5.X', 'OS CPE: cpe:/o:linux:linux_kernel:5', 'OS details: Linux 5.4 - 5.15', 'Network Distance: 1 hop', '(salida de ejemplo, es una estimación)'];
+function run8(which){
+  const isSV = which === 'sv';
+  const panel = $(isSV ? '#pSV' : '#pOS'), other = $(isSV ? '#pOS' : '#pSV');
+  other.classList.remove('focus'); panel.classList.remove('focus'); void panel.offsetWidth; panel.classList.add('focus');
+  eyeSvc.look(panel); eyeSvc.zoom(1.2,.85);
+  T.after('s8f', () => { panel.classList.remove('focus'); eyeSvc.zoom(1,1); }, 3600);
+  typeInto($(isSV ? '#outSV' : '#outOS'), isSV ? OUT_SV : OUT_OS, isSV ? 's8a' : 's8b', {cps:150, gap:130});
+}
+$('#runSV').addEventListener('click', () => run8('sv'));
+$('#runOS').addEventListener('click', () => run8('os'));
+enter[7] = () => { $('#outSV').textContent = ''; $('#outOS').textContent = ''; eyeSvc.wake(); eyeSvc.look(null); };
+leave[7] = () => { eyeSvc.look(null); eyeSvc.zoom(1,1); };
+
+/* =========================================================
+   9 AUDITORÍA
+   ========================================================= */
+const eyeAud = null;
+const PHASES = [
+  {t:'Planificación', d:'Se define el alcance, los objetivos y los permisos. La autorización por escrito se obtiene aquí.', n:'Nmap aún no interviene: se decide qué redes y equipos se pueden escanear y cuándo.'},
+  {t:'Ejecución', d:'Se aplican los procedimientos y pruebas definidos en el plan.', n:'Aquí se usa Nmap: obtiene información técnica de la red, como equipos activos, puertos y servicios.'},
+  {t:'Obtención de evidencia', d:'Se guardan las pruebas que respaldan cada hallazgo: salidas, fechas, comandos y capturas.', n:'Las salidas de Nmap se guardan con -oN o -oX, junto con el comando usado.'},
+  {t:'Análisis', d:'Se interpreta la evidencia: qué es normal, qué es un riesgo y qué falta por revisar.', n:'Un puerto abierto no es automáticamente una vulnerabilidad: se evalúa si está justificado.'},
+  {t:'Informe', d:'Se comunican hallazgos, riesgos y recomendaciones a la dirección y al área de TI.', n:'Los datos de Nmap respaldan los hallazgos, pero el informe los interpreta.'}
+];
+const CHECK = [
+  {t:'Inventario de activos', c:'nmap -sn 192.168.1.0/24', d:'Lista los equipos activos para compararlos con el inventario oficial. ¿Hay equipos que nadie registró?'},
+  {t:'Revisión de infraestructura y redes', c:'nmap --traceroute 192.168.1.20', d:'Ayuda a entender cómo se organiza la red: equipos, segmentos y rutas hacia ellos.'},
+  {t:'Puertos y servicios expuestos', c:'nmap -sS -sV 192.168.1.20', d:'Muestra qué puertos están abiertos y qué servicio hay. Se contrasta con lo que debería estar permitido.'},
+  {t:'Escaneos de red', c:'nmap -sS -sV -oN evidencia.txt 192.168.1.0/24', d:'Deja constancia: el escaneo y sus resultados quedan guardados como evidencia.'}
+];
+const tl = $('#timeline');
+tl.innerHTML = PHASES.map((p,i) => `<div class="ph${i===1?' exec':''}"><div class="slot">${i===1?'<div id="eyeAud" class="eye-xs" style="width:clamp(56px,6vw,84px)"></div>':''}</div><button>${p.t}</button></div>`).join('');
+const eyeAud2 = createEye($('#eyeAud'), {slide:8});
+const phBtns = $$('.ph button', tl);
+function selPhase(i){
+  phBtns.forEach((b,j) => b.classList.toggle('sel', i===j));
+  const p = PHASES[i];
+  $('#phT').textContent = p.t; $('#phD').textContent = p.d; $('#phN').innerHTML = (i===1 ? '<b>Nmap:</b> ' : '') + p.n;
+  eyeAud2.look(phBtns[i]); eyeAud2.zoom(i===1?1.3:1, 1);
+}
+makeSelectable(phBtns, selPhase, true);
+$('#chk').innerHTML = CHECK.map(c => `<button class="ck"><div class="row"><span class="box"></span><b>${c.t}</b></div><div class="more">${c.d}<code>$ ${c.c}</code></div></button>`).join('');
+const ckBtns = $$('.ck');
+ckBtns.forEach(b => b.addEventListener('click', () => b.classList.toggle('sel')));
+enter[8] = () => { selPhase(1); eyeAud2.wake(); ckBtns.forEach((b,i) => b.classList.toggle('sel', i===0)); };
+
+/* =========================================================
+   10 NMAP VS NESSUS
+   ========================================================= */
+const eyeVs = createEye($('#eyeVs'), {slide:9});
+const QS = [
+  ['¿Qué equipos hay en la red?','nmap','Nmap: descubre y lista los hosts activos.'],
+  ['¿Qué puertos y servicios están expuestos?','nmap','Nmap: prueba puertos e identifica servicios.'],
+  ['¿Qué versión de software corre?','nmap','Nmap: con -sV intenta obtener producto y versión.'],
+  ['¿Esa versión tiene vulnerabilidades conocidas?','nessus','Nessus: compara lo encontrado con vulnerabilidades conocidas.'],
+  ['¿Hay configuraciones inseguras?','nessus','Nessus: revisa configuraciones y riesgos de seguridad.'],
+  ['¿Qué riesgos hay que atender primero?','nessus','Nessus: evalúa vulnerabilidades y ayuda a priorizar; el auditor decide.']
+];
+$('#qs').innerHTML = QS.map(q => `<button class="q">${q[0]}</button>`).join('');
+const qBtns = $$('.q');
+function selQ(i){
+  qBtns.forEach((b,j) => b.classList.toggle('sel', i===j));
+  const q = QS[i], nm = q[1] === 'nmap';
+  $('#tNmap').classList.toggle('lit', nm); $('#tNmap').classList.toggle('dim', !nm);
+  $('#tNessus').classList.toggle('lit', !nm); $('#tNessus').classList.toggle('dim', nm);
+  $('#vsCap').textContent = q[2];
+  eyeVs.look(nm ? $('#tNmap') : $('#tNessus')); eyeVs.zoom(1.15,1);
+}
+makeSelectable(qBtns, selQ);
+enter[9] = () => { selQ(0); eyeVs.wake(); };
+leave[9] = () => eyeVs.look(null);
+
+/* =========================================================
+   11 VENTAJAS Y LIMITACIONES
+   ========================================================= */
+const eyeMid = createEye($('#eyeMid'), {slide:10});
+const PROS = [
+  ['Código abierto','Gratuito y con código revisable.'],
+  ['Multiplataforma','Funciona en Linux, Windows, macOS y otros sistemas.'],
+  ['Versátil','Descubrimiento, puertos, servicios, versiones y sistema operativo.'],
+  ['Potente','Desde un equipo hasta redes grandes, con opciones de ritmo y detalle.'],
+  ['Amplia documentación','Manual, libro oficial y una comunidad activa.'],
+  ['NSE','Scripts que amplían sus capacidades.']
+];
+const CONS = [
+  ['Los resultados necesitan interpretación','Nmap informa; la persona decide qué significa.'],
+  ['Los firewalls pueden dificultar el análisis','Los puertos filtered ocultan lo que hay detrás.'],
+  ['La detección del sistema operativo no siempre es exacta','Es una estimación basada en huellas.'],
+  ['Un puerto abierto no significa automáticamente una vulnerabilidad','Hay que evaluar el servicio, su versión y si es necesario.']
+];
+const li = (a,i) => `<li style="--i:${i}" tabindex="0"><b>${a[0]}</b><span>${a[1]}</span></li>`;
+$('#pros').innerHTML = PROS.map(li).join(''); $('#cons').innerHTML = CONS.map(li).join('');
+$$('#s11 li').forEach(el => {
+  const over = () => eyeMid.look(el);
+  el.addEventListener('pointerenter', over); el.addEventListener('focus', over);
+});
+enter[10] = () => eyeMid.wake();
+leave[10] = () => eyeMid.look(null);
+
+/* =========================================================
+   12 CIERRE
+   ========================================================= */
+const eyeEnd = createEye($('#eyeEnd'), {slide:11});
+const cn = $('#closeNet'), cx2 = cn.getContext('2d');
+let cNodes = [], cW=0, cH=0, cLit = 0, cCur = -1, raf12 = 0, cDone = false;
+function build12(){
+  const r = cn.getBoundingClientRect(), d = Math.min(devicePixelRatio||1,2);
+  cW = r.width; cH = r.height; cn.width = cW*d; cn.height = cH*d; cx2.setTransform(d,0,0,d,0,0);
+  cNodes = [];
+  const n = clamp(Math.round(cW/55), 14, 30);
+  for(let i=0;i<n;i++){
+    const left = i%2===0;
+    const x = left ? rand(cW*.03, cW*.26) : rand(cW*.74, cW*.97);
+    const y = rand(cH*.06, cH*.94);
+    cNodes.push({x, y, lit:false});
+  }
+  cNodes.sort((a,b)=> Math.atan2(a.y-cH*.3,a.x-cW/2) - Math.atan2(b.y-cH*.3,b.x-cW/2));
+}
+function hub(){ const r = $('#eyeEnd').getBoundingClientRect(), c = cn.getBoundingClientRect(); return {x:r.left+r.width/2-c.left, y:r.top+r.height/2-c.top}; }
+function draw12(){
+  cx2.clearRect(0,0,cW,cH);
+  const h = hub();
+  for(let i=0;i<cNodes.length;i++){
+    const a = cNodes[i];
+    cx2.strokeStyle = a.lit ? 'rgba(125,255,166,.28)' : 'rgba(25,227,212,.14)'; cx2.lineWidth = 1;
+    cx2.beginPath(); cx2.moveTo(h.x,h.y); cx2.lineTo(a.x,a.y); cx2.stroke();
+    for(let j=i+1;j<cNodes.length;j++){
+      const b = cNodes[j], dx=a.x-b.x, dy=a.y-b.y;
+      if(dx*dx+dy*dy < 14000){ cx2.strokeStyle = 'rgba(138,92,255,.22)'; cx2.beginPath(); cx2.moveTo(a.x,a.y); cx2.lineTo(b.x,b.y); cx2.stroke(); }
+    }
+  }
+  if(cCur >= 0 && cNodes[cCur]){
+    const a = cNodes[cCur]; cx2.strokeStyle = '#19e3d4'; cx2.lineWidth = 2; cx2.setLineDash([5,5]);
+    cx2.beginPath(); cx2.moveTo(h.x,h.y); cx2.lineTo(a.x,a.y); cx2.stroke(); cx2.setLineDash([]);
+  }
+  for(let i=0;i<cNodes.length;i++){
+    const a = cNodes[i];
+    cx2.fillStyle = '#04080b'; cx2.strokeStyle = a.lit ? '#7dffa6' : '#19e3d4'; cx2.lineWidth = 2;
+    cx2.beginPath(); cx2.arc(a.x,a.y, i===cCur?7:4.5, 0, Math.PI*2); cx2.fill(); cx2.stroke();
+  }
+  raf12 = requestAnimationFrame(draw12);
+}
+function scan12(){
+  T.clear('s12'); cDone = false; cLit = 0; cCur = -1;
+  cNodes.forEach(n => n.lit = false);
+  $('#complete').textContent = ''; $('#endTerm').textContent = '';
+  eyeEnd.zoom(1,1); eyeEnd.squintTo(0); eyeEnd.look(null);
+  const cRect = () => cn.getBoundingClientRect();
+  const n = cNodes.length, per = Math.max(140, Math.min(300, 4200/n));
+  let i = 0;
+  const lines = ['$ nmap -sS -sV red-autorizada', `Hosts activos: ${n}`, 'Puertos y servicios identificados.', '# Uso responsable: solo con autorización.'];
+  T.after('s12', () => {
+    T.every('s12', () => {
+      if(i >= n){
+        T.clear('s12'); cCur = -1; eyeEnd.look(null); eyeEnd.zoom(1.15,.9);
+        typeInto($('#endTerm'), lines, 's12t', {cps:90, done: () => {
+          const el = $('#complete'); el.textContent = 'SCAN COMPLETE'; el.classList.add('glitch'); el.dataset.text = 'SCAN COMPLETE';
+          el.classList.add('gl'); setTimeout(() => el.classList.remove('gl'), 450); cDone = true;
+        }});
+        return;
+      }
+      cCur = i; cNodes[i].lit = true;
+      const r = cRect(); eyeEnd.look({x:r.left+cNodes[i].x, y:r.top+cNodes[i].y}); eyeEnd.zoom(1.08,1);
+      i++;
+    }, per);
+  }, 900);
+}
+$('#rescan').addEventListener('click', scan12);
+enter[11] = () => {
+  eyeEnd.wake(); build12(); cancelAnimationFrame(raf12); raf12 = requestAnimationFrame(draw12); scan12();
+};
+leave[11] = () => { cancelAnimationFrame(raf12); eyeEnd.look(null); eyeEnd.zoom(1,1); };
+addEventListener('resize', () => { if(cur===11){ build12(); scan12(); } });
+
+/* =========================================================
+   ARRANQUE
+   ========================================================= */
+bgResize(); addEventListener('resize', bgResize);
+requestAnimationFrame(tick);
+requestAnimationFrame(bgDraw);
+const startN = parseInt(location.hash.slice(1),10);
+go(startN>=1 && startN<=total ? startN-1 : 0);
+})();
+</script>
+</body>
+</html>
